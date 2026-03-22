@@ -1,7 +1,7 @@
 # 🫀 Cardiovascular Risk Intelligence Platform
 
 🔗 **Live App:** https://cardio-risk-prediction-and-simulation.streamlit.app
-📦 **Repository:** 
+
 
 ---
 
