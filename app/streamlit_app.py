@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 from src.analysis import (
     build_decision_summary,
@@ -35,9 +40,7 @@ from src.train import ModelTrainer
 from src.utils import load_joblib, load_json
 
 
-BASE_DIR = Path(__file__).resolve().parents[0]
-if BASE_DIR.name == "app":
-    BASE_DIR = BASE_DIR.parent
+BASE_DIR = ROOT_DIR
 
 MODELS_DIR = BASE_DIR / "models"
 OUTPUTS_DIR = BASE_DIR / "outputs"
