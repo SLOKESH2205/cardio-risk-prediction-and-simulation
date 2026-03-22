@@ -201,6 +201,55 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environment
+venv/
+env/
+ml_env/
+.venv/
+
+# VS Code
+.vscode/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Data (optional - choose one)
+data/*.csv
+!data/sample.csv
+
+# Models (IMPORTANT DECISION)
+models/*.pkl
+
+# Exceptions (if you WANT to keep models)
+!models/pipeline.pkl
+!models/segmentation.pkl
+
+# Build / cache
+build/
+dist/
+*.egg-info/
+.uv-cache/
+
+# Streamlit
+.streamlit/
+
+# Temporary
+outputs/
+
 # Marimo
 marimo/_static/
 marimo/_lsp/
