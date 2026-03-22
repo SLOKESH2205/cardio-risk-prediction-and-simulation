@@ -1,13 +1,24 @@
+# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.pytest_cache/
-.mypy_cache/
-.venv/
+
+# Virtual env
 venv/
-env/
+.env
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data / models (important for ML projects)
+data/
+models/
 artifacts/
-logs/
-*.joblib
+outputs/
+
+# OS
+.DS_Store
+
+# Logs
 *.log
