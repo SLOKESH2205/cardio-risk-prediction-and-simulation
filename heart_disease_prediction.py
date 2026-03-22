@@ -13,7 +13,10 @@ import matplotlib
 matplotlib.use('Agg')
 
 # Load the dataset
-data = pd.read_csv('heart_disease.csv')
+from pathlib import Path
+
+DATA_PATH = Path(__file__).resolve().parent / 'data' / 'raw' / 'heart_disease.csv'
+data = pd.read_csv(DATA_PATH)
 
 # Check for missing values before imputation
 print("Missing values before imputation:")

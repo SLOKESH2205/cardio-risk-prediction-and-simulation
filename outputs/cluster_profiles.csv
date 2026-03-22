@@ -1,0 +1,4 @@
+cluster,label,size_n,size_pct,age_years_mean,bmi_mean,systolic_bp_mean,pulse_pressure_mean,lifestyle_risk_score_mean,cholesterol_raw_mean,target_rate,dominant_bp_category,description
+0,Moderate-Risk Lifestyle,27061,39.03,57.04,27.15,121.11,41.54,0.3,172.31,0.4737,2,"Mean age 57.0, BMI 27.2, systolic BP 121.1, pulse pressure 41.5."
+1,Low-Risk Active,22359,32.25,45.63,25.49,115.9,39.75,0.65,164.4,0.2427,2,"Mean age 45.6, BMI 25.5, systolic BP 115.9, pulse pressure 39.7."
+2,High-Risk Metabolic,19908,28.72,54.52,30.15,148.26,58.04,0.51,203.99,0.7815,3,"Mean age 54.5, BMI 30.1, systolic BP 148.3, pulse pressure 58.0."

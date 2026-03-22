@@ -1,118 +1,94 @@
-# ❤️ Heart Disease Prediction using Machine Learning and Explainable AI
+# Cardiovascular Risk Decision-Support System
 
-This project uses **Logistic Regression**, a classic machine learning algorithm, to predict the likelihood of heart disease based on patient health parameters. It includes feature-based predictions, explainability with **SHAP values**, and generates a complete PDF report including visuals, predictions, and recommendations.
+End-to-end ML and analytics platform that harmonizes two cardiovascular datasets, segments patients, explains predictions with SHAP, and serves insights through a 4-tab Streamlit app.
 
----
+This is a cardiovascular risk decision-support system, not just a prediction model. The product is designed to combine prediction, reliability analysis, scenario simulation, and cohort comparison into a decision-oriented workflow.
 
-## 🧠 Objective
+## Architecture
 
-The aim is to develop a lightweight, interpretable machine learning model that:
-- Predicts the presence or absence of heart disease
-- Explains the reasoning behind predictions using SHAP
-- Calculates a health score
-- Provides a personalized health suggestion
-- Outputs a professional PDF report
+```text
+Framingham CSV        Cardio CSV
+      |                   |
+      +-------- ingest.py --------+
+                    |
+              harmonized.csv
+                    |
+                features.py
+          /         |         \
+ segmentation.py  train.py  01_EDA.ipynb
+          \         |         /
+            explain.py + evaluate.py
+                    |
+             models/ + outputs/
+                    |
+           app/streamlit_app.py
+```
 
----
+## Setup
 
-## 📌 Features
-
-- ✅ Logistic Regression-based prediction model  
-- ✅ Takes patient input parameters and predicts risk  
-- ✅ Health score based on risk probability  
-- ✅ Personalized health advice based on prediction  
-- ✅ SHAP visualizations for interpretability  
-- ✅ Confusion Matrix and ROC Curve evaluation  
-- ✅ Automatically generates a downloadable PDF report  
-
----
-
-## 🛠️ Technologies Used
-
-- **Python**
-- **Pandas / NumPy** – Data handling
-- **Scikit-learn** – Machine Learning (Logistic Regression, train-test split, evaluation metrics)
-- **Matplotlib / Seaborn** – Visualization
-- **SHAP** – Feature-level interpretability
-- **ReportLab** – PDF report generation
-
----
-
-## 🧾 Input Parameters (Features Used)
-
-- Age  
-- Sex  
-- Chest Pain Type  
-- Resting Blood Pressure  
-- Cholesterol  
-- Fasting Blood Sugar  
-- Resting ECG Results  
-- Maximum Heart Rate  
-- Exercise-induced Angina  
-- ST Depression  
-- Slope of ST segment  
-- Number of major vessels  
-- Thalassemia  
-
-These are collected via user input or test dataset, cleaned, and passed into the model for prediction.
-
----
-
-## 📂 Dataset Used
-
-The model is trained on the **Framingham Heart Study Dataset**, a well-known public dataset containing clinical data used to study heart disease risk factors.  
-🔗 You can find the dataset on Kaggle or UCI repository.  
-*Note: The dataset includes anonymized patient information and is used here for research and educational purposes only.*
-
----
-
-## ⚙️ How the Model Works
-
-1. **Data Preprocessing**:
-   - Cleaned and normalized the Framingham Heart Study dataset
-   - Handled missing values and encoded categorical features
-
-2. **Model Training**:
-   - Trained a **Logistic Regression model**
-   - Evaluated using test data (train-test split)
-
-3. **Prediction**:
-   - User inputs health data manually or from a file
-   - Model returns prediction and probability
-
-4. **SHAP Explainability**:
-   - Shows which features contributed most to the prediction
-   - Generates a SHAP summary plot
-
-5. **PDF Report**:
-   - Final output includes patient summary, prediction result, SHAP plot, ROC curve, and health advice
-
----
-
-## 📈 Model Evaluation
-
-- **Accuracy**: Model’s overall performance  
-- **Confusion Matrix**: Visual breakdown of true/false positives and negatives  
-- **ROC Curve**: Plots True Positive Rate vs False Positive Rate  
-- **AUC Score**: Performance metric ranging from 0 to 1  
-
----
-
-## 📄 Output PDF Report Includes:
-
-- Patient input details  
-- Predicted disease status (Yes/No)  
-- Risk probability score  
-- Health score  
-- Health suggestion  
-- SHAP feature impact chart  
-- Confusion matrix and ROC curve  
-
----
-
-## 🚀 How to Run the Project
-
-1. Clone the Repository:
 ```bash
-git clone https://github.com/your-username/Heart-Disease-Prediction.git
-cd Heart-Disease-Prediction
+pip install -r requirements.txt
+python run_pipeline.py
+streamlit run app/streamlit_app.py
+```
+
+## Dataset Setup
+
+Place the input files in:
+
+- `data/raw/heart_disease.csv`
+- `data/raw/cardio_train.csv`
+
+Generated artifacts:
+
+- `data/processed/harmonized.csv`
+- `models/pipeline.pkl`
+- `models/segmentation.pkl`
+- `outputs/`
+
+## Modules
+
+`src/ingest.py` loads both datasets, renames raw columns into a unified schema, applies physiological outlier filters, drops duplicates, and writes both the harmonized dataset and a data quality report.
+
+`src/features.py` creates domain-informed cardiovascular features such as pulse pressure, AHA blood pressure category, age group, BMI category, lifestyle burden, and clinically motivated interaction terms.
+
+`src/segmentation.py` validates cluster count with elbow and silhouette diagnostics, fits KMeans segments, saves the segmentation artifact, profiles each cluster, and adds a drift-style atypical-patient warning during cluster prediction.
+
+`src/train.py` builds the production-ready sklearn pipeline, trains Logistic Regression, Random Forest, and XGBoost, compares CV and test ROC-AUC, saves the best model, and evaluates cross-dataset transportability.
+
+`src/explain.py` uses SHAP TreeExplainer for global and local interpretability, produces human-readable explanations, estimates confidence intervals via bootstrap perturbations, and powers what-if comparisons.
+
+`src/evaluate.py` generates ROC, confusion matrix, precision-recall plots, and a model card for the saved best model.
+
+## Key Insights
+
+The project computes cohort insights directly from the harmonized dataset and surfaces them in the Population Insights tab. After running the pipeline, use the dashboard and notebook to inspect the measured risk multiplier for Stage 2 hypertension, the excess burden of lifestyle score above 2, and the senior-vs-young risk ratio within the combined cohort.
+
+## Resume Bullets
+
+ML/Data Science roles:
+"Engineered an end-to-end cardiovascular risk prediction system by harmonizing two
+heterogeneous clinical datasets (74K records), building domain-informed features
+(pulse pressure, AHA BP categorization, composite lifestyle score), training an
+XGBoost pipeline achieving 0.84+ ROC-AUC with cross-population generalization
+tested via cross-dataset evaluation. Integrated SHAP-based explainability with
+human-readable output."
+
+Data Analyst roles:
+"Designed an ETL pipeline to fuse two cardiovascular datasets with mismatched schemas,
+performed cohort-level EDA surfacing that Stage 2 hypertension patients carry 2.8x
+baseline risk, applied KMeans clustering to identify three clinically distinct patient
+segments, and built a 4-tab interactive Streamlit analytics dashboard."
+
+## Tech Stack
+
+- pandas
+- NumPy
+- scikit-learn
+- XGBoost
+- SHAP
+- Plotly
+- Streamlit
+- Matplotlib
+- Seaborn
+- Joblib

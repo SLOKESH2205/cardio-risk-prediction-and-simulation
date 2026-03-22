@@ -1,0 +1,68 @@
+{
+  "rows_before_cleaning": {
+    "framingham": 4240,
+    "cardio": 70000
+  },
+  "rows_removed": {
+    "framingham": {
+      "systolic_bp": 1,
+      "diastolic_bp": 0,
+      "bmi": 19,
+      "age_years": 0,
+      "duplicates": 0
+    },
+    "cardio": {
+      "systolic_bp": 228,
+      "diastolic_bp": 1034,
+      "bmi": 72,
+      "age_years": 0,
+      "duplicates": 3188
+    }
+  },
+  "missing_value_rates": {
+    "framingham": {
+      "gender_bin": 0.0,
+      "age_years": 0.0,
+      "smoke": 0.0,
+      "cholesterol_raw": 0.0118,
+      "systolic_bp": 0.0,
+      "diastolic_bp": 0.0,
+      "bmi": 0.0045,
+      "glucose_raw": 0.0915,
+      "target": 0.0,
+      "alcohol": 1.0,
+      "active": 1.0,
+      "source": 0.0
+    },
+    "cardio": {
+      "age_years": 0.0,
+      "gender_bin": 0.0,
+      "systolic_bp": 0.0,
+      "diastolic_bp": 0.0,
+      "bmi": 0.0,
+      "cholesterol_raw": 0.0,
+      "glucose_raw": 0.0,
+      "smoke": 0.0,
+      "alcohol": 0.0,
+      "active": 0.0,
+      "target": 0.0,
+      "source": 0.0
+    }
+  },
+  "outlier_counts": {
+    "framingham": {
+      "systolic_bp": 1,
+      "diastolic_bp": 0,
+      "bmi": 19,
+      "age_years": 0,
+      "duplicates": 0
+    },
+    "cardio": {
+      "systolic_bp": 228,
+      "diastolic_bp": 1034,
+      "bmi": 72,
+      "age_years": 0,
+      "duplicates": 3188
+    }
+  }
+}

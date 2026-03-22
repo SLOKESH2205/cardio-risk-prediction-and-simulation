@@ -1,0 +1,16 @@
+{
+  "model_name": "XGBoost",
+  "training_date": "2026-03-21T15:29:12.439048",
+  "dataset_size": 13866,
+  "feature_count": 14,
+  "performance_metrics": {
+    "auc": 0.8091372560326273,
+    "average_precision": 0.7872505681755394
+  },
+  "known_limitations": [
+    "Model is trained on observational datasets and is not a diagnostic device.",
+    "Framingham lacks alcohol and activity fields available in the cardio dataset.",
+    "Cross-population transport may degrade for unseen clinical distributions."
+  ],
+  "intended_use": "Educational risk stratification, analytics dashboards, and ML portfolio demonstration."
+}

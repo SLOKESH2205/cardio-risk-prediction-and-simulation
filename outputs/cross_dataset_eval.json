@@ -1,0 +1,6 @@
+{
+  "cardio_to_framingham_auc": 0.6639868288541947,
+  "framingham_to_cardio_auc": 0.684798079742305,
+  "auc_drop_pct": 16.652897976180217,
+  "generalization": "poor"
+}
