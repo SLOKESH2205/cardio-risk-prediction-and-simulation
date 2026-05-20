@@ -296,8 +296,8 @@ def render_tab1(
             lifestyle = (int(st.session_state["smoke"]) * 2) + int(st.session_state["alcohol"]) + (1 - int(st.session_state["active"]))
             st.caption(f"Lifestyle risk score: {lifestyle}/4")
             predict_col, reset_col = st.columns(2)
-            predict_clicked = predict_col.button("Predict Risk", use_container_width=True)
-            if reset_col.button("Reset patient", use_container_width=True):
+            predict_clicked = predict_col.button("Predict Risk", width="stretch")
+            if reset_col.button("Reset patient", width="stretch"):
                 for key in list(st.session_state.keys()):
                     del st.session_state[key]
                 st.rerun()
@@ -412,7 +412,7 @@ def render_tab1(
                         color_continuous_scale="Blues",
                         title="Risk Composition by Component",
                     )
-                    st.plotly_chart(plotly_style(breakdown_fig), use_container_width=True)
+                    st.plotly_chart(plotly_style(breakdown_fig), width="stretch")
 
             with trajectory_col:
                 with st.container():
@@ -420,7 +420,7 @@ def render_tab1(
                     trajectory_df = bundle["trajectory_df"].copy()
                     trajectory_df["risk_pct"] = trajectory_df["risk"] * 100
                     traj_fig = px.line(trajectory_df, x="age_years", y="risk_pct", markers=True, title="Projected Risk with Age Progression")
-                    st.plotly_chart(plotly_style(traj_fig), use_container_width=True)
+                    st.plotly_chart(plotly_style(traj_fig), width="stretch")
                     for row in trajectory_df.itertuples(index=False):
                         st.write(f"- Age {int(row.age_years)} -> {_format_pct(row.risk * 100)}")
                     if bundle["trajectory_warning"]:
@@ -454,8 +454,8 @@ def render_tab2(featured_df: pd.DataFrame) -> None:
         age_fig = plotly_style(px.bar(filtered.groupby("age_group", as_index=False)["target"].mean(), x="age_group", y="target", title="Risk Rate by Age Group"))
         bp_fig = plotly_style(px.bar(filtered.groupby("bp_category", as_index=False)["target"].mean(), x="bp_category", y="target", color="bp_category", title="Risk Rate by BP Category"))
         left, right = st.columns(2)
-        left.plotly_chart(age_fig, use_container_width=True)
-        right.plotly_chart(bp_fig, use_container_width=True)
+        left.plotly_chart(age_fig, width="stretch")
+        right.plotly_chart(bp_fig, width="stretch")
 
     with st.container():
         card("Lifestyle and Correlation")
@@ -463,8 +463,8 @@ def render_tab2(featured_df: pd.DataFrame) -> None:
         corr_cols = ["age_years", "bmi", "systolic_bp", "diastolic_bp", "pulse_pressure", "cholesterol_raw", "glucose_raw", "lifestyle_risk_score", "target"]
         corr_fig = plotly_style(px.imshow(filtered[corr_cols].corr(numeric_only=True), text_auto=".2f", title="Correlation Heatmap"))
         left, right = st.columns(2)
-        left.plotly_chart(lifestyle_fig, use_container_width=True)
-        right.plotly_chart(corr_fig, use_container_width=True)
+        left.plotly_chart(lifestyle_fig, width="stretch")
+        right.plotly_chart(corr_fig, width="stretch")
 
     normal_risk = float(filtered.loc[filtered["bp_category"] == 0, "target"].mean()) if (filtered["bp_category"] == 0).any() else 0.0
     stage2_risk = float(filtered.loc[filtered["bp_category"] == 3, "target"].mean()) if (filtered["bp_category"] == 3).any() else 0.0
@@ -499,7 +499,7 @@ def render_tab3(stability_df: pd.DataFrame) -> None:
             c4.metric("F1", f"{best_row['f1']:.3f}")
             display_comparison = comparison[["model", "cv_auc", "test_auc", "precision", "recall", "f1"]].copy()
             display_comparison.columns = ["Model", "CV AUC", "Test AUC", "Precision", "Recall", "F1"]
-            st.dataframe(display_comparison, use_container_width=True)
+            st.dataframe(display_comparison, width="stretch")
             st.info("XGBoost was selected because it achieved the best AUC and handles non-linear feature interactions better than Logistic Regression and Random Forest in this mixed cohort setting.")
 
     roc_col, curve_col = st.columns([1, 2])
@@ -518,7 +518,7 @@ def render_tab3(stability_df: pd.DataFrame) -> None:
         st.markdown("### ROC Curve Analysis")
         roc_path = OUTPUTS_DIR / "roc_curve.png"
         if roc_path.exists():
-            st.image(str(roc_path), use_container_width=True)
+            st.image(str(roc_path), width="stretch")
         st.info("These technical diagnostics are intentionally kept in the Model Report tab, separate from the decision-support view.")
 
     cm_col, shap_col = st.columns(2)
@@ -526,12 +526,12 @@ def render_tab3(stability_df: pd.DataFrame) -> None:
         st.markdown("### Confusion Matrix")
         cm_path = OUTPUTS_DIR / "confusion_matrix.png"
         if cm_path.exists():
-            st.image(str(cm_path), use_container_width=True)
+            st.image(str(cm_path), width="stretch")
     with shap_col:
         st.markdown("### Global SHAP Importance")
         shap_path = OUTPUTS_DIR / "shap_global.png"
         if shap_path.exists():
-            st.image(str(shap_path), use_container_width=True)
+            st.image(str(shap_path), width="stretch")
 
     with st.container():
         card("Feature Stability Across Datasets")
@@ -539,7 +539,7 @@ def render_tab3(stability_df: pd.DataFrame) -> None:
         display_df["framingham_corr"] = display_df["framingham_corr"].map(_format_signed)
         display_df["cardio_corr"] = display_df["cardio_corr"].map(_format_signed)
         display_df.columns = ["Feature", "Framingham", "Cardio", "Stability"]
-        st.dataframe(display_df, use_container_width=True)
+        st.dataframe(display_df, width="stretch")
         unstable = display_df.loc[display_df["Stability"] == "unstable", "Feature"].tolist()
         if unstable:
             st.warning(f"Unstable features detected across datasets: {', '.join(unstable)}")
@@ -605,7 +605,7 @@ def render_tab4(pipeline: object, cluster_profiles: dict[int, dict], risk_refere
 
     with st.container():
         card("Scenario Table")
-        st.dataframe(scenario_rows[["Scenario", "Risk", "Change", "Interpretation"]], use_container_width=True)
+        st.dataframe(scenario_rows[["Scenario", "Risk", "Change", "Interpretation"]], width="stretch")
         if "Quit Smoking" in results_df["scenario"].values:
             smoking_row = results_df[results_df["scenario"] == "Quit Smoking"].iloc[0]
             if float(smoking_row["delta"]) > 0:
