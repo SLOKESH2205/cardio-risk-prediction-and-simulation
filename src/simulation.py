@@ -14,6 +14,15 @@ from src.train import ModelTrainer
 _FEATURE_ENGINEER = FeatureEngineer()
 _TRAINER = ModelTrainer()
 
+UNCERTAINTY_NUMERIC_COLUMNS = [
+    "age_years",
+    "systolic_bp",
+    "diastolic_bp",
+    "bmi",
+    "cholesterol_raw",
+    "glucose_raw",
+]
+
 
 SCENARIO_MAP = {
     "Original": None,
@@ -65,9 +74,9 @@ def estimate_uncertainty(
 ) -> dict[str, float]:
     rng = np.random.default_rng(random_state)
     probs: list[float] = []
-    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    numeric_cols = [column for column in UNCERTAINTY_NUMERIC_COLUMNS if column in df.columns]
     for _ in range(n_samples):
-        sample = df.copy()
+        sample = df.copy().astype({column: "float64" for column in numeric_cols})
         for col in numeric_cols:
             base = float(sample.iloc[0][col])
             sigma = max(abs(base) * 0.01, 0.01)

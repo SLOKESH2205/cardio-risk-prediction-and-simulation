@@ -50,6 +50,15 @@ class SHAPExplainer:
         self.numeric_feature_stds: pd.Series | None = None
         self.expected_value: float | None = None
 
+    def _numeric_input_columns(self, patient_df: pd.DataFrame) -> list[str]:
+        if self.preprocessor is None:
+            return []
+        for name, _transformer, columns in self.preprocessor.transformers_:
+            if name != "num":
+                continue
+            return [str(column) for column in columns if str(column) in patient_df.columns]
+        return patient_df.select_dtypes(include=[np.number]).columns.tolist()
+
     def setup(self, pipeline: Pipeline, X_train: pd.DataFrame) -> None:
         self.pipeline = pipeline
         model = pipeline.named_steps["classifier"]
@@ -117,11 +126,11 @@ class SHAPExplainer:
         ).sort_values("shap_value", key=lambda s: s.abs(), ascending=False).reset_index(drop=True)
 
         rng = np.random.default_rng(self.random_state)
-        numeric_cols = patient_df.select_dtypes(include=[np.number]).columns.tolist()
         bootstrap_scores: list[float] = []
         stds = self.numeric_feature_stds if self.numeric_feature_stds is not None else pd.Series(dtype=float)
+        numeric_cols = self._numeric_input_columns(patient_df)
         for _ in range(50):
-            sample = patient_df.copy()
+            sample = patient_df.copy().astype({column: "float64" for column in numeric_cols})
             for column in numeric_cols:
                 sigma = 0.01 * float(stds.get(column, 1.0) or 1.0)
                 sample.loc[:, column] = float(sample.iloc[0][column]) + float(rng.normal(0, sigma))
