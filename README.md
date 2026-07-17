@@ -34,8 +34,6 @@
 - [Limitations](#️-limitations)
 - [Use Cases](#-use-cases)
 - [Roadmap](#-roadmap)
-- [Why This Project Stands Out](#-why-this-project-stands-out)
-- [License](#-license)
 - [Author](#-author)
 
 ---
