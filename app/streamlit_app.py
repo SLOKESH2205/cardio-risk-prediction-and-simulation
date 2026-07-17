@@ -48,6 +48,7 @@ PROCESSED_PATH = BASE_DIR / "data" / "processed" / "harmonized.csv"
 RISK_REFERENCE_PATH = OUTPUTS_DIR / "risk_reference.csv"
 CLUSTER_PROFILES_PATH = OUTPUTS_DIR / "cluster_profiles.csv"
 BEST_METRICS_PATH = OUTPUTS_DIR / "best_model_metrics.json"
+BEST_HYPERPARAMETERS_PATH = OUTPUTS_DIR / "best_hyperparameters.json"
 
 
 def inject_styles() -> None:
@@ -265,6 +266,43 @@ def _format_signed(value: float) -> str:
 
 def _format_pct(value: float) -> str:
     return f"{float(value):.2f}%"
+
+
+def _format_decimal(value: object, digits: int = 3) -> str:
+    try:
+        return f"{float(value):.{digits}f}"
+    except (TypeError, ValueError):
+        return "N/A"
+
+
+def _format_probability(value: object) -> str:
+    try:
+        return f"{float(value):.2f}"
+    except (TypeError, ValueError):
+        return "N/A"
+
+
+def _metrics_table(rows: list[dict[str, object]]) -> pd.DataFrame:
+    display_df = pd.DataFrame(rows)
+    metric_columns = ["ROC-AUC", "Precision", "Recall", "F1", "Threshold"]
+    for column in metric_columns:
+        if column in display_df.columns:
+            display_df[column] = display_df[column].map(lambda value: _format_decimal(value, 3))
+    return display_df
+
+
+def _confusion_matrix_frame(matrix: object) -> pd.DataFrame:
+    if not isinstance(matrix, list) or len(matrix) != 2:
+        return pd.DataFrame()
+    return pd.DataFrame(
+        matrix,
+        index=["Actual negative", "Actual positive"],
+        columns=["Predicted negative", "Predicted positive"],
+    )
+
+
+def _load_optional_json(path: Path) -> dict:
+    return load_json(path) if path.exists() else {}
 
 
 def _trajectory_is_non_monotonic(trajectory_df: pd.DataFrame) -> bool:
@@ -533,21 +571,207 @@ def render_tab3(stability_df: pd.DataFrame) -> None:
     cross_path = OUTPUTS_DIR / "cross_dataset_eval.csv"
     model_card_path = OUTPUTS_DIR / "model_card.json"
     data_quality_path = OUTPUTS_DIR / "data_quality_report.json"
+    preprocessing_summary_path = OUTPUTS_DIR / "preprocessing_ablation_summary.json"
+    selected_features_path = OUTPUTS_DIR / "selected_features.json"
+    learning_curve_diagnostics_path = OUTPUTS_DIR / "learning_curve_diagnostics.json"
+    error_summary_path = OUTPUTS_DIR / "error_analysis_summary.json"
+    feature_importance_path = OUTPUTS_DIR / "feature_importance.csv"
+    threshold_analysis_path = OUTPUTS_DIR / "threshold_analysis.json"
+    calibration_path = OUTPUTS_DIR / "calibration_analysis.json"
+
+    metrics = _load_optional_json(BEST_METRICS_PATH)
+    default_metrics = metrics.get("default_threshold_metrics", {}) if isinstance(metrics.get("default_threshold_metrics", {}), dict) else {}
+    validation_metrics = metrics.get("validation_selection_metrics", {}) if isinstance(metrics.get("validation_selection_metrics", {}), dict) else {}
+    calibration = metrics.get("calibration", {}) if isinstance(metrics.get("calibration", {}), dict) else _load_optional_json(calibration_path)
+    threshold_analysis = _load_optional_json(threshold_analysis_path)
+    hyperparameters = _load_optional_json(BEST_HYPERPARAMETERS_PATH)
+    model_card = _load_optional_json(model_card_path)
+
+    if metrics:
+        with st.container():
+            card("Selected Model Performance")
+            headline_cols = st.columns(5)
+            headline_cols[0].metric("Selected Model", str(metrics.get("model", "N/A")))
+            headline_cols[1].metric("Test ROC-AUC", _format_decimal(metrics.get("test_auc"), 3))
+            headline_cols[2].metric("F1", _format_decimal(metrics.get("f1"), 3))
+            headline_cols[3].metric("Recall", _format_decimal(metrics.get("recall"), 3))
+            headline_cols[4].metric("Decision Threshold", _format_probability(metrics.get("threshold")))
+
+            context_cols = st.columns(4)
+            context_cols[0].metric("CV ROC-AUC", _format_decimal(metrics.get("cv_auc"), 3))
+            context_cols[1].metric("Precision", _format_decimal(metrics.get("precision"), 3))
+            context_cols[2].metric("Feature Count", str(metrics.get("feature_count", "N/A")))
+            context_cols[3].metric("Preprocessing", str(metrics.get("preprocessing_strategy", "N/A")))
+            st.caption("The production score uses the validation-selected threshold saved in `best_model_metrics.json`.")
+
+        report_rows = []
+        if metrics:
+            report_rows.append(
+                {
+                    "Evaluation View": "Final test at selected threshold",
+                    "ROC-AUC": metrics.get("test_auc"),
+                    "Precision": metrics.get("precision"),
+                    "Recall": metrics.get("recall"),
+                    "F1": metrics.get("f1"),
+                    "Threshold": metrics.get("threshold"),
+                }
+            )
+        if default_metrics:
+            report_rows.append(
+                {
+                    "Evaluation View": "Final test at default 0.50 threshold",
+                    "ROC-AUC": default_metrics.get("test_auc"),
+                    "Precision": default_metrics.get("precision"),
+                    "Recall": default_metrics.get("recall"),
+                    "F1": default_metrics.get("f1"),
+                    "Threshold": 0.5,
+                }
+            )
+        if validation_metrics:
+            report_rows.append(
+                {
+                    "Evaluation View": "Validation selection split",
+                    "ROC-AUC": validation_metrics.get("test_auc"),
+                    "Precision": validation_metrics.get("precision"),
+                    "Recall": validation_metrics.get("recall"),
+                    "F1": validation_metrics.get("f1"),
+                    "Threshold": validation_metrics.get("validation_threshold"),
+                }
+            )
+
+        with st.container():
+            card("Complete Metric Summary")
+            st.dataframe(_metrics_table(report_rows), width="stretch", hide_index=True)
+            if threshold_analysis.get("explanation"):
+                st.info(str(threshold_analysis["explanation"]))
+
+        matrix_cols = st.columns(3)
+        with matrix_cols[0]:
+            card("Selected Threshold Counts")
+            selected_cm = _confusion_matrix_frame(metrics.get("confusion_matrix"))
+            if not selected_cm.empty:
+                st.dataframe(selected_cm, width="stretch")
+        with matrix_cols[1]:
+            card("Default Threshold Counts")
+            default_cm = _confusion_matrix_frame(default_metrics.get("confusion_matrix"))
+            if not default_cm.empty:
+                st.dataframe(default_cm, width="stretch")
+        with matrix_cols[2]:
+            card("Validation Counts")
+            validation_cm = _confusion_matrix_frame(validation_metrics.get("confusion_matrix"))
+            if not validation_cm.empty:
+                st.dataframe(validation_cm, width="stretch")
 
     if comparison_path.exists():
         comparison = pd.read_csv(comparison_path)
-        best_row = comparison.sort_values("test_auc", ascending=False).iloc[0]
         with st.container():
-            card("Model Comparison")
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Selected Model", str(best_row["model"]))
-            c2.metric("CV AUC", f"{best_row['cv_auc']:.3f}")
-            c3.metric("Test AUC", f"{best_row['test_auc']:.3f}")
-            c4.metric("F1", f"{best_row['f1']:.3f}")
+            card("Candidate Model Comparison")
             display_comparison = comparison[["model", "cv_auc", "test_auc", "precision", "recall", "f1"]].copy()
             display_comparison.columns = ["Model", "CV AUC", "Test AUC", "Precision", "Recall", "F1"]
+            for column in ["CV AUC", "Test AUC", "Precision", "Recall", "F1"]:
+                display_comparison[column] = display_comparison[column].map(lambda value: _format_decimal(value, 3))
             st.dataframe(display_comparison, width="stretch")
-            st.info("XGBoost was selected because it achieved the best AUC and handles non-linear feature interactions better than Logistic Regression and Random Forest in this mixed cohort setting.")
+            st.info("XGBoost is kept as the selected model because it has the strongest validation selection score while preserving explainability through SHAP diagnostics.")
+
+    diagnostic_cols = st.columns(2)
+    with diagnostic_cols[0]:
+        card("XGBoost Hyperparameters")
+        if hyperparameters:
+            hyper_df = pd.DataFrame(
+                [{"Parameter": key, "Value": _format_decimal(value, 4) if isinstance(value, float) else value} for key, value in hyperparameters.items()]
+            )
+            st.dataframe(hyper_df, width="stretch", hide_index=True)
+        else:
+            st.caption("Hyperparameter artifact not found.")
+    with diagnostic_cols[1]:
+        card("Calibration Diagnostics")
+        if calibration:
+            calibration_rows = [
+                {"Metric": "Method", "Value": calibration.get("method", "N/A")},
+                {"Metric": "Selected for deployment", "Value": str(calibration.get("selected_for_deployment", "N/A"))},
+                {"Metric": "Base validation AUC", "Value": _format_decimal(calibration.get("base_validation_auc"), 4)},
+                {"Metric": "Calibrated validation AUC", "Value": _format_decimal(calibration.get("calibrated_validation_auc"), 4)},
+                {"Metric": "Base best F1", "Value": _format_decimal(calibration.get("base_best_f1"), 4)},
+                {"Metric": "Calibrated best F1", "Value": _format_decimal(calibration.get("calibrated_best_f1"), 4)},
+                {"Metric": "Base best threshold", "Value": _format_decimal(calibration.get("base_best_threshold"), 2)},
+                {"Metric": "Calibrated best threshold", "Value": _format_decimal(calibration.get("calibrated_best_threshold"), 2)},
+            ]
+            st.dataframe(pd.DataFrame(calibration_rows), width="stretch", hide_index=True)
+            if calibration.get("reason"):
+                st.caption(str(calibration["reason"]))
+        else:
+            st.caption("Calibration artifact not found.")
+
+    if model_card:
+        with st.container():
+            card("Model Card Summary")
+            model_card_metrics = model_card.get("performance_metrics", {})
+            card_cols = st.columns(5)
+            card_cols[0].metric("Model Name", str(model_card.get("model_name", "N/A")))
+            card_cols[1].metric("Evaluation Rows", f"{int(model_card.get('dataset_size', 0)):,}")
+            card_cols[2].metric("Feature Count", str(model_card.get("feature_count", "N/A")))
+            card_cols[3].metric("Average Precision", _format_decimal(model_card_metrics.get("average_precision"), 3))
+            card_cols[4].metric("Card Threshold", _format_decimal(model_card_metrics.get("decision_threshold"), 2))
+            st.caption(f"Intended use: {model_card.get('intended_use', 'N/A')}")
+
+    ablation_cols = st.columns(2)
+    with ablation_cols[0]:
+        card("Preprocessing Ablation")
+        preprocessing_summary = _load_optional_json(preprocessing_summary_path)
+        preprocessing_path = OUTPUTS_DIR / "preprocessing_ablation.csv"
+        if preprocessing_summary:
+            st.metric("Selected Strategy", str(preprocessing_summary.get("selected_strategy", "N/A")))
+            st.metric("Validation F1", _format_decimal(preprocessing_summary.get("selected_validation_f1"), 3))
+            st.caption(str(preprocessing_summary.get("rule", "")))
+        if preprocessing_path.exists():
+            preprocessing_df = pd.read_csv(preprocessing_path)
+            st.dataframe(preprocessing_df, width="stretch", hide_index=True)
+    with ablation_cols[1]:
+        card("Feature Ablation")
+        selected_features = _load_optional_json(selected_features_path)
+        feature_ablation_path = OUTPUTS_DIR / "feature_ablation.csv"
+        if selected_features:
+            recommended_drops = selected_features.get("recommended_drops", [])
+            retained_features = selected_features.get("retained_features", [])
+            st.metric("Recommended Drops", str(len(recommended_drops)))
+            st.metric("Retained Features", str(len(retained_features)))
+            st.write(", ".join(recommended_drops) if recommended_drops else "No engineered feature drops were recommended.")
+            st.caption(str(selected_features.get("rule", "")))
+        if feature_ablation_path.exists():
+            feature_ablation_df = pd.read_csv(feature_ablation_path)
+            st.dataframe(feature_ablation_df, width="stretch", hide_index=True)
+
+    learning_error_cols = st.columns(2)
+    with learning_error_cols[0]:
+        card("Learning Curve Diagnosis")
+        learning_diagnostics = _load_optional_json(learning_curve_diagnostics_path)
+        learning_curve_path = OUTPUTS_DIR / "learning_curve.csv"
+        if learning_diagnostics:
+            st.metric("Diagnosis", str(learning_diagnostics.get("diagnosis", "N/A")).replace("_", " ").title())
+            st.metric("Final Validation F1", _format_decimal(learning_diagnostics.get("final_validation_f1_mean"), 3))
+            st.metric("Generalization Gap", _format_decimal(learning_diagnostics.get("final_generalization_gap"), 4))
+            st.info(str(learning_diagnostics.get("explanation", "")))
+        if learning_curve_path.exists():
+            curve_df = pd.read_csv(learning_curve_path)
+            st.dataframe(curve_df, width="stretch", hide_index=True)
+    with learning_error_cols[1]:
+        card("Error Analysis")
+        error_summary = _load_optional_json(error_summary_path)
+        if error_summary:
+            st.metric("False Positives", f"{int(error_summary.get('false_positive_count', 0)):,}")
+            st.metric("False Negatives", f"{int(error_summary.get('false_negative_count', 0)):,}")
+            st.metric("Analysis Threshold", _format_decimal(error_summary.get("threshold"), 2))
+            st.caption("Review the saved false-positive and false-negative samples to explain where the model struggles.")
+        error_contrast_path = OUTPUTS_DIR / "error_feature_contrasts.csv"
+        if error_contrast_path.exists():
+            contrast_df = pd.read_csv(error_contrast_path).head(12)
+            st.dataframe(contrast_df, width="stretch", hide_index=True)
+
+    if feature_importance_path.exists():
+        with st.container():
+            card("Feature Importance")
+            importance_df = pd.read_csv(feature_importance_path).head(15)
+            st.dataframe(importance_df, width="stretch", hide_index=True)
 
     roc_col, curve_col = st.columns([1, 2])
     with roc_col:
@@ -560,6 +784,8 @@ def render_tab3(stability_df: pd.DataFrame) -> None:
             st.metric("Cardio -> Framingham AUC", f"{cardio_auc:.3f}")
             st.metric("Framingham -> Cardio AUC", f"{frame_auc:.3f}")
             st.markdown(f"### Cross-Dataset Insight\n\n- Cardio -> Framingham: AUC = {cardio_auc:.3f}\n- Framingham -> Cardio: AUC = {frame_auc:.3f}\n\nPerformance shifts by about {gap:.2f}% across datasets, which justifies caution on unstable features.")
+        else:
+            st.caption("Cross-dataset evaluation artifact is not available in this run.")
 
     with curve_col:
         st.markdown("### ROC Curve Analysis")
