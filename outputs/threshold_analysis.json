@@ -1,0 +1,67 @@
+{
+  "validation_threshold_0_50": {
+    "threshold": 0.5,
+    "precision": 0.6911693742962843,
+    "recall": 0.7957407407407407,
+    "f1": 0.7397779116811569,
+    "confusion_matrix": [
+      [
+        3758,
+        1920
+      ],
+      [
+        1103,
+        4297
+      ]
+    ]
+  },
+  "validation_best_f1_threshold": {
+    "threshold": 0.4599999999999999,
+    "precision": 0.6649582662176015,
+    "recall": 0.840925925925926,
+    "f1": 0.7426608880529888,
+    "confusion_matrix": [
+      [
+        3390,
+        2288
+      ],
+      [
+        859,
+        4541
+      ]
+    ]
+  },
+  "test_threshold_0_50": {
+    "threshold": 0.5,
+    "precision": 0.6847742922723795,
+    "recall": 0.7954377129314175,
+    "f1": 0.7359693003494826,
+    "confusion_matrix": [
+      [
+        4625,
+        2472
+      ],
+      [
+        1381,
+        5370
+      ]
+    ]
+  },
+  "test_at_validation_threshold": {
+    "threshold": 0.4599999999999999,
+    "precision": 0.6572764465225015,
+    "recall": 0.8329136424233446,
+    "f1": 0.7347445446230236,
+    "confusion_matrix": [
+      [
+        4165,
+        2932
+      ],
+      [
+        1128,
+        5623
+      ]
+    ]
+  },
+  "explanation": "The validation-selected threshold did not improve test F1, which means the default 0.50 cutoff was at least as strong on this final split."
+}

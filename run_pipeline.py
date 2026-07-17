@@ -1,7 +1,8 @@
-"""Run the full cardiovascular risk platform pipeline."""
+"""Run the full end-to-end cardiovascular risk platform pipeline."""
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 
 from src.evaluate import Evaluator
@@ -9,7 +10,7 @@ from src.explainability import SHAPExplainer
 from src.features import FeatureEngineer
 from src.ingest import DataIngestor
 from src.logger import get_logger
-from src.segmentation import PatientSegmenter
+from src.services.reporting import ReportingService
 from src.train import ModelTrainer
 
 
@@ -17,14 +18,20 @@ LOGGER = get_logger(__name__)
 
 
 def main() -> None:
-    """Execute the project end-to-end pipeline.
+    """Execute the project end-to-end pipeline."""
+    parser = argparse.ArgumentParser(description="Run the cardiovascular risk intelligence pipeline")
+    parser.add_argument(
+        "--tune",
+        action="store_true",
+        help="Run XGBoost RandomizedSearchCV tuning. This is now the default unless --quick is used.",
+    )
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="Skip RandomizedSearchCV and use a fixed XGBoost configuration for faster local checks",
+    )
+    args = parser.parse_args()
 
-    Args:
-        None.
-
-    Returns:
-        None.
-    """
     base_dir = Path.cwd()
     ingestor = DataIngestor(base_dir)
     harmonized_df = ingestor.harmonize()
@@ -32,27 +39,24 @@ def main() -> None:
     feature_engineer = FeatureEngineer()
     featured_df = feature_engineer.engineer(harmonized_df)
 
-    segmenter = PatientSegmenter(base_dir)
-    optimal_k = segmenter.find_optimal_k(featured_df)
-    LOGGER.info("Optimal k suggested: %s", optimal_k)
-    segmented_df = segmenter.fit(featured_df, k=3)
-    cluster_profiles = segmenter.profile_clusters(segmented_df)
-    LOGGER.info("Cluster profiles ready: %s", cluster_profiles)
+    reporting_service = ReportingService(base_dir)
+    reporting_service.save_population_summary(featured_df)
 
     trainer = ModelTrainer(base_dir)
-    training_results = trainer.train_all(segmented_df)
-    framingham_df = segmented_df[segmented_df["source"] == "framingham"].copy()
-    cardio_df = segmented_df[segmented_df["source"] == "cardio"].copy()
-    trainer.cross_dataset_eval(training_results["best_pipeline"], framingham_df, cardio_df)
+    training_results = trainer.train_all(featured_df, tune=not args.quick)
 
-    explainer = SHAPExplainer(base_dir)
-    feature_names = trainer.get_feature_names_from_pipeline(training_results["best_pipeline"])
-    explainer.setup(training_results["best_pipeline"], training_results["X_train"])
-    explainer.explain_global(
-        training_results["X_test"],
-        feature_names,
-        base_dir / "outputs" / "shap_global.png",
-    )
+    if training_results["best_model_name"] in {"RandomForest", "XGBoost"}:
+        try:
+            explainer = SHAPExplainer(base_dir)
+            feature_names = trainer.get_feature_names_from_pipeline(training_results["best_pipeline"])
+            explainer.setup(training_results["best_pipeline"], training_results["X_train"])
+            explainer.explain_global(
+                training_results["X_test"],
+                feature_names,
+                base_dir / "outputs" / "shap_global.png",
+            )
+        except Exception as exc:  # pragma: no cover - explainability should not break training
+            LOGGER.warning("SHAP report skipped: %s", exc)
 
     evaluator = Evaluator(base_dir)
     evaluator.full_report(
@@ -60,10 +64,10 @@ def main() -> None:
         training_results["X_test"],
         training_results["y_test"],
         training_results["best_model_name"],
+        threshold=float(training_results["best_metrics"].get("threshold", 0.5)),
     )
-    LOGGER.info("Pipeline complete. Run: streamlit run app/streamlit_app.py")
+    LOGGER.info("Pipeline complete. Run: streamlit run app.py")
 
 
 if __name__ == "__main__":
     main()
-

@@ -1,18 +1,73 @@
 {
   "model": "XGBoost",
-  "cv_auc": 0.8035764328708673,
-  "test_auc": 0.8091372560326273,
-  "precision": 0.7582345191040843,
-  "recall": 0.6809643543854459,
-  "f1": 0.7175251305228707,
+  "cv_auc": 0.8032131545267438,
+  "test_auc": 0.8031627229899946,
+  "precision": 0.6572764465225015,
+  "recall": 0.8329136424233446,
+  "f1": 0.7347445446230236,
   "confusion_matrix": [
     [
-      5637,
-      1468
+      4165,
+      2932
     ],
     [
-      2157,
-      4604
+      1128,
+      5623
     ]
-  ]
+  ],
+  "threshold": 0.4599999999999999,
+  "default_threshold_metrics": {
+    "model": "XGBoost",
+    "cv_auc": 0.8032131545267438,
+    "test_auc": 0.8031627229899946,
+    "precision": 0.6847742922723795,
+    "recall": 0.7954377129314175,
+    "f1": 0.7359693003494826,
+    "confusion_matrix": [
+      [
+        4625,
+        2472
+      ],
+      [
+        1381,
+        5370
+      ]
+    ]
+  },
+  "validation_selection_metrics": {
+    "model": "XGBoost",
+    "cv_auc": 0.8032131545267438,
+    "test_auc": 0.8099110276179666,
+    "precision": 0.6911693742962843,
+    "recall": 0.7957407407407407,
+    "f1": 0.7397779116811569,
+    "confusion_matrix": [
+      [
+        3758,
+        1920
+      ],
+      [
+        1103,
+        4297
+      ]
+    ],
+    "validation_threshold": 0.4599999999999999,
+    "validation_threshold_f1": 0.7426608880529888,
+    "selection_score": 0.7426608880529888,
+    "preprocessing_strategy": "none",
+    "feature_count": 22
+  },
+  "preprocessing_strategy": "none",
+  "feature_count": 22,
+  "calibration": {
+    "method": "sigmoid",
+    "selected_for_deployment": false,
+    "reason": "Calibration is reported as a reliability diagnostic; the saved pipeline stays directly explainable for SHAP and feature importance.",
+    "base_validation_auc": 0.8099110276179666,
+    "calibrated_validation_auc": 0.809999641240395,
+    "base_best_f1": 0.7426608880529888,
+    "calibrated_best_f1": 0.7428379400151223,
+    "base_best_threshold": 0.4599999999999999,
+    "calibrated_best_threshold": 0.36999999999999994
+  }
 }

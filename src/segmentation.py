@@ -29,8 +29,23 @@ class PatientSegmenter:
         "pulse_pressure",
         "cholesterol_raw",
         "glucose_raw",
-        "lifestyle_risk_score",
+        "mean_arterial_pressure",
     ]
+
+    def _with_compatible_features(self, df: pd.DataFrame, features: list[str]) -> pd.DataFrame:
+        frame = df.copy()
+        if "pulse_pressure" in features and "pulse_pressure" not in frame.columns:
+            frame["pulse_pressure"] = frame["systolic_bp"] - frame["diastolic_bp"]
+        if "mean_arterial_pressure" in features and "mean_arterial_pressure" not in frame.columns:
+            pulse_pressure = frame.get("pulse_pressure", frame["systolic_bp"] - frame["diastolic_bp"])
+            frame["mean_arterial_pressure"] = frame["diastolic_bp"] + (pulse_pressure / 3.0)
+        if "lifestyle_risk_score" in features and "lifestyle_risk_score" not in frame.columns:
+            frame["lifestyle_risk_score"] = (
+                frame["smoke"].fillna(0).astype(int) * 2
+                + frame["alcohol"].fillna(0).astype(int)
+                + (1 - frame["active"].fillna(1).astype(int))
+            )
+        return frame
 
     def __init__(self, base_dir: Path | None = None) -> None:
         """Initialize segmentation paths.
@@ -56,6 +71,7 @@ class PatientSegmenter:
         Returns:
             Recommended cluster count.
         """
+        df = self._with_compatible_features(df, self.CLUSTERING_FEATURES)
         clean_df = df.dropna(subset=self.CLUSTERING_FEATURES).copy()
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(clean_df[self.CLUSTERING_FEATURES])
@@ -92,6 +108,7 @@ class PatientSegmenter:
         Returns:
             Dataframe with cluster assignments.
         """
+        df = self._with_compatible_features(df, self.CLUSTERING_FEATURES)
         frame = df.dropna(subset=self.CLUSTERING_FEATURES).copy()
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(frame[self.CLUSTERING_FEATURES])
@@ -140,7 +157,6 @@ class PatientSegmenter:
             else:
                 label = "Moderate-Risk Lifestyle"
 
-            dominant_bp = int(cluster_df["bp_category"].mode().iloc[0])
             description = (
                 f"Mean age {cluster_df['age_years'].mean():.1f}, "
                 f"BMI {cluster_df['bmi'].mean():.1f}, "
@@ -156,10 +172,9 @@ class PatientSegmenter:
                 "bmi_mean": round(cluster_df["bmi"].mean(), 2),
                 "systolic_bp_mean": round(cluster_df["systolic_bp"].mean(), 2),
                 "pulse_pressure_mean": round(cluster_df["pulse_pressure"].mean(), 2),
-                "lifestyle_risk_score_mean": round(cluster_df["lifestyle_risk_score"].mean(), 2),
+                "mean_arterial_pressure_mean": round(cluster_df["mean_arterial_pressure"].mean(), 2),
                 "cholesterol_raw_mean": round(cluster_df["cholesterol_raw"].mean(), 2),
                 "target_rate": round(target_rate, 4),
-                "dominant_bp_category": dominant_bp,
                 "description": description,
             }
             LOGGER.info("Cluster %s profile: %s", cluster_id, profile_row)
@@ -194,6 +209,7 @@ class PatientSegmenter:
         cluster_profiles = artifact.get("cluster_profiles", {})
         mean_distances = artifact.get("mean_distances", {})
 
+        patient_df = self._with_compatible_features(patient_df, features)
         scaled = scaler.transform(patient_df[features])
         cluster_id = int(kmeans.predict(scaled)[0])
         centroid_distance = float(kmeans.transform(scaled)[0, cluster_id])
@@ -203,8 +219,6 @@ class PatientSegmenter:
             label = f"{label} | Note: this patient's profile is atypical for their cluster."
         return cluster_id, label
 
-
-
 def describe_cluster(cluster_id: int) -> str:
     """Return a default cluster description for a numeric cluster id."""
     descriptions = {
@@ -213,6 +227,7 @@ def describe_cluster(cluster_id: int) -> str:
         2: "High-risk metabolic group with elevated blood pressure and cholesterol burden.",
     }
     return descriptions.get(cluster_id, "Unknown cluster profile.")
+
 
 if __name__ == "__main__":
     demo_path = Path.cwd() / "data" / "processed" / "harmonized.csv"

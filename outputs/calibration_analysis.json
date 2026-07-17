@@ -1,0 +1,11 @@
+{
+  "method": "sigmoid",
+  "selected_for_deployment": false,
+  "reason": "Calibration is reported as a reliability diagnostic; the saved pipeline stays directly explainable for SHAP and feature importance.",
+  "base_validation_auc": 0.8099110276179666,
+  "calibrated_validation_auc": 0.809999641240395,
+  "base_best_f1": 0.7426608880529888,
+  "calibrated_best_f1": 0.7428379400151223,
+  "base_best_threshold": 0.4599999999999999,
+  "calibrated_best_threshold": 0.36999999999999994
+}

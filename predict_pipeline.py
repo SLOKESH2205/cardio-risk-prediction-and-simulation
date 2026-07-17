@@ -8,7 +8,7 @@ import pandas as pd
 
 from src.features import FeatureEngineer
 from src.train import ModelTrainer
-from src.utils import load_joblib
+from src.utils import load_joblib, load_json
 
 
 def main() -> None:
@@ -44,7 +44,17 @@ def main() -> None:
     probability = float(
         pipeline.predict_proba(engineered[trainer.NUMERICAL_FEATURES + trainer.CATEGORICAL_FEATURES])[0][1]
     )
-    print({"risk_percent": round(probability * 100, 2)})
+    metrics_path = Path.cwd() / "outputs" / "best_model_metrics.json"
+    threshold = 0.5
+    if metrics_path.exists():
+        threshold = float(load_json(metrics_path).get("threshold", threshold))
+    print(
+        {
+            "risk_percent": round(probability * 100, 2),
+            "decision_threshold": round(threshold, 2),
+            "predicted_positive": bool(probability >= threshold),
+        }
+    )
 
 
 if __name__ == "__main__":

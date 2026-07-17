@@ -1,0 +1,11 @@
+{
+  "selected_strategy": "none",
+  "selected_validation_f1": 0.7426608880529888,
+  "selected_validation_auc": 0.8099110276179666,
+  "rule": "Choose the preprocessing strategy with the best validation F1, using validation AUC as the tie-breaker.",
+  "strategies_compared": [
+    "none",
+    "winsor_1_99",
+    "clip_5_95"
+  ]
+}

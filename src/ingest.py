@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -43,6 +44,12 @@ class DataIngestor:
         self.outputs_dir = ensure_directory(self.base_dir / "outputs")
         self.quality_report: DataQualityReport | None = None
 
+    def _validate_required_columns(self, frame: pd.DataFrame, required_columns: list[str], dataset_name: str) -> None:
+        """Validate that all required columns are present before modeling."""
+        missing_columns = [column for column in required_columns if column not in frame.columns]
+        if missing_columns:
+            raise ValueError(f"{dataset_name} is missing required columns: {missing_columns}")
+
     def load_framingham(self, path: Path) -> pd.DataFrame:
         """Load and map Framingham dataset to unified schema.
 
@@ -55,6 +62,11 @@ class DataIngestor:
         if not path.exists():
             raise FileNotFoundError(f"Framingham dataset not found at {path}")
         df = pd.read_csv(path).copy()
+        self._validate_required_columns(
+            df,
+            ["sex", "age", "sysBP", "diaBP", "BMI", "totChol", "currentSmoker", "glucose", "TenYearCHD"],
+            "Framingham",
+        )
         df = df.rename(
             columns={
                 "sex": "gender_bin",
@@ -97,6 +109,11 @@ class DataIngestor:
         if not path.exists():
             raise FileNotFoundError(f"Cardio dataset not found at {path}")
         df = pd.read_csv(path, sep=";").copy()
+        self._validate_required_columns(
+            df,
+            ["age", "gender", "height", "weight", "ap_hi", "ap_lo", "cholesterol", "gluc", "smoke", "alco", "active", "cardio"],
+            "Cardio",
+        )
         df = df.drop(columns=["id"])
         df["age_years"] = (df["age"] / 365.25).astype(int)
         df["gender_bin"] = df["gender"].map({1: 0, 2: 1})
@@ -132,23 +149,23 @@ class DataIngestor:
         ]
 
     def clean(self, df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int], dict[str, int]]:
-        """Clean dataframe using physiological bounds and duplicates removal.
-
-        Args:
-            df: Input dataframe.
-
-        Returns:
-            Tuple of cleaned dataframe, rows removed by reason, and outlier counts.
-        """
+        """Clean dataframe using physiological bounds and duplicates removal."""
         frame = df.copy()
+        for column in ["systolic_bp", "diastolic_bp", "bmi", "age_years", "cholesterol_raw", "glucose_raw"]:
+            if column in frame.columns:
+                frame[column] = pd.to_numeric(frame[column], errors="coerce")
+
         conditions = {
             "systolic_bp": ~frame["systolic_bp"].between(60, 250),
             "diastolic_bp": ~frame["diastolic_bp"].between(40, 150),
             "bmi": ~frame["bmi"].between(10, 60),
             "age_years": ~frame["age_years"].between(18, 90),
+            "cholesterol_raw": ~frame["cholesterol_raw"].between(100, 500),
+            "glucose_raw": ~frame["glucose_raw"].between(40, 400),
+            "invalid_blood_pressure": frame["diastolic_bp"] >= frame["systolic_bp"],
         }
         rows_removed = {key: int(mask.sum()) for key, mask in conditions.items()}
-        valid_mask = ~(conditions["systolic_bp"] | conditions["diastolic_bp"] | conditions["bmi"] | conditions["age_years"])
+        valid_mask = ~(conditions["systolic_bp"] | conditions["diastolic_bp"] | conditions["bmi"] | conditions["age_years"] | conditions["cholesterol_raw"] | conditions["glucose_raw"] | conditions["invalid_blood_pressure"])
         cleaned = frame.loc[valid_mask].copy()
         duplicate_count = int(cleaned.duplicated().sum())
         cleaned = cleaned.drop_duplicates().reset_index(drop=True)
@@ -219,11 +236,42 @@ class DataIngestor:
         )
         self.quality_report = quality_report
         save_json(self.outputs_dir / "data_quality_report.json", quality_report)
+        self._write_quality_reports(quality_report, harmonized)
 
         class_balance = harmonized["target"].value_counts(normalize=True).round(4).to_dict()
         LOGGER.info("Final harmonized shape: %s", harmonized.shape)
         LOGGER.info("Class balance: %s", class_balance)
         return harmonized
+
+    def _write_quality_reports(self, quality_report: DataQualityReport, harmonized: pd.DataFrame) -> None:
+        """Persist markdown and html quality reports for auditing."""
+        rows_removed = quality_report.rows_removed
+        markdown_lines = [
+            "# Data Quality Report",
+            "",
+            "## Summary",
+            f"- Harmonized rows: {len(harmonized)}",
+            f"- Positive rate: {harmonized['target'].mean():.3f}",
+            "",
+            "## Removed rows",
+        ]
+        for dataset_name, counts in rows_removed.items():
+            if isinstance(counts, dict):
+                markdown_lines.append(f"### {dataset_name}")
+                for reason, count in counts.items():
+                    markdown_lines.append(f"- {reason}: {count}")
+        markdown_text = "\n".join(markdown_lines) + "\n"
+        self.outputs_dir.joinpath("data_quality_report.md").write_text(markdown_text, encoding="utf-8")
+
+        html_text = "<html><body><h1>Data Quality Report</h1><ul>"
+        for dataset_name, counts in rows_removed.items():
+            if isinstance(counts, dict):
+                html_text += f"<li><strong>{dataset_name}</strong><ul>"
+                for reason, count in counts.items():
+                    html_text += f"<li>{reason}: {count}</li>"
+                html_text += "</ul></li>"
+        html_text += "</ul></body></html>"
+        self.outputs_dir.joinpath("data_quality_report.html").write_text(html_text, encoding="utf-8")
 
 
 if __name__ == "__main__":

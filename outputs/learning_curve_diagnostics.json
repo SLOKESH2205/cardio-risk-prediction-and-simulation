@@ -1,0 +1,8 @@
+{
+  "diagnosis": "data_or_feature_bottleneck",
+  "explanation": "Validation F1 barely improves as more data is added, which suggests the current feature signal is the main bottleneck.",
+  "final_train_f1_mean": 0.7386570502975045,
+  "final_validation_f1_mean": 0.7368271068389494,
+  "final_generalization_gap": 0.0018299434585551388,
+  "validation_f1_gain_from_smallest_to_full_train": 0.00012771316904813812
+}

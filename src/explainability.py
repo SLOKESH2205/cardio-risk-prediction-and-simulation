@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -49,6 +50,8 @@ class SHAPExplainer:
         self.feature_names: list[str] = []
         self.numeric_feature_stds: pd.Series | None = None
         self.expected_value: float | None = None
+        self._cached_global_values: Any | None = None
+        self._cached_global_features: list[str] | None = None
 
     def _numeric_input_columns(self, patient_df: pd.DataFrame) -> list[str]:
         if self.preprocessor is None:
@@ -83,8 +86,11 @@ class SHAPExplainer:
         if self.explainer is None or self.preprocessor is None:
             raise ValueError("Call setup() before explain_global().")
         processed = self.preprocessor.transform(X_test)
-        shap_values = self.explainer.shap_values(processed)
-        shap_matrix = np.asarray(shap_values[1] if isinstance(shap_values, list) else shap_values)
+        if self._cached_global_values is None:
+            shap_values = self.explainer.shap_values(processed)
+            self._cached_global_values = np.asarray(shap_values[1] if isinstance(shap_values, list) else shap_values)
+        shap_matrix = self._cached_global_values
+        self._cached_global_features = feature_names
 
         dot_path = Path(save_path)
         bar_path = dot_path.with_name(f"{dot_path.stem}_bar{dot_path.suffix}")
@@ -104,6 +110,7 @@ class SHAPExplainer:
         top_indices = np.argsort(mean_abs)[::-1][:5]
         top_features = [(feature_names[idx], float(mean_abs[idx])) for idx in top_indices]
         LOGGER.info("Top 5 SHAP features: %s", top_features)
+        gc.collect()
 
     def explain_single(self, patient_df: pd.DataFrame, feature_names: list[str]) -> tuple[pd.DataFrame, dict[str, float]]:
         if self.explainer is None or self.preprocessor is None or self.pipeline is None:

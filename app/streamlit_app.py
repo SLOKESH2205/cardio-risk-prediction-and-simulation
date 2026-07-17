@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import pandas as pd
 import plotly.express as px
@@ -47,6 +47,7 @@ OUTPUTS_DIR = BASE_DIR / "outputs"
 PROCESSED_PATH = BASE_DIR / "data" / "processed" / "harmonized.csv"
 RISK_REFERENCE_PATH = OUTPUTS_DIR / "risk_reference.csv"
 CLUSTER_PROFILES_PATH = OUTPUTS_DIR / "cluster_profiles.csv"
+BEST_METRICS_PATH = OUTPUTS_DIR / "best_model_metrics.json"
 
 
 def inject_styles() -> None:
@@ -121,7 +122,7 @@ def get_missing_artifacts() -> list[Path]:
 
 
 @st.cache_resource
-def load_assets() -> tuple[object, dict, pd.DataFrame, SHAPExplainer, list[str], dict[int, dict], pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def load_assets() -> tuple[object, dict, pd.DataFrame, SHAPExplainer, list[str], dict[int, dict], pd.DataFrame, pd.DataFrame, pd.DataFrame, float]:
     pipeline = load_joblib(MODELS_DIR / "pipeline.pkl")
     segmentation_artifact = load_joblib(MODELS_DIR / "segmentation.pkl")
     harmonized = pd.read_csv(PROCESSED_PATH)
@@ -129,12 +130,15 @@ def load_assets() -> tuple[object, dict, pd.DataFrame, SHAPExplainer, list[str],
     trainer = ModelTrainer(BASE_DIR)
     feature_names = trainer.get_feature_names_from_pipeline(pipeline)
     explainer = SHAPExplainer(BASE_DIR)
-    explainer.setup(pipeline, featured[trainer.NUMERICAL_FEATURES + trainer.CATEGORICAL_FEATURES])
+    model_input = featured[trainer.NUMERICAL_FEATURES + trainer.CATEGORICAL_FEATURES].apply(pd.to_numeric, errors="coerce")
+    explainer.setup(pipeline, model_input)
     cluster_profiles = segmentation_artifact.get("cluster_profiles", {})
     risk_reference = pd.read_csv(RISK_REFERENCE_PATH)
     cluster_profiles_df = pd.read_csv(CLUSTER_PROFILES_PATH)
     stability_df = feature_stability(featured)
-    return pipeline, segmentation_artifact, featured, explainer, feature_names, cluster_profiles, risk_reference, cluster_profiles_df, stability_df
+    metrics = load_json(BEST_METRICS_PATH) if BEST_METRICS_PATH.exists() else {}
+    decision_threshold = float(metrics.get("threshold", 0.5))
+    return pipeline, segmentation_artifact, featured, explainer, feature_names, cluster_profiles, risk_reference, cluster_profiles_df, stability_df, decision_threshold
 
 
 def initialize_session_state() -> None:
@@ -167,6 +171,37 @@ def risk_tier(probability: float) -> str:
 
 def bp_category_label(encoded_value: int) -> str:
     return {0: "Normal", 1: "Elevated", 2: "Stage 1", 3: "Stage 2"}.get(int(encoded_value), "Unknown")
+
+
+def derive_bp_category(systolic_bp: float, diastolic_bp: float) -> int:
+    if systolic_bp >= 140 or diastolic_bp >= 90:
+        return 3
+    if systolic_bp >= 130 or diastolic_bp >= 80:
+        return 2
+    if systolic_bp >= 120 and diastolic_bp < 80:
+        return 1
+    return 0
+
+
+def add_display_features(df: pd.DataFrame) -> pd.DataFrame:
+    frame = df.copy()
+    frame["age_group_display"] = pd.cut(
+        frame["age_years"],
+        bins=[17, 39, 59, 90],
+        labels=["18-39", "40-59", "60+"],
+        include_lowest=True,
+    ).astype(str)
+    frame["bp_category_display"] = frame.apply(
+        lambda row: derive_bp_category(float(row["systolic_bp"]), float(row["diastolic_bp"])),
+        axis=1,
+    )
+    frame["bp_category_label"] = frame["bp_category_display"].map(bp_category_label)
+    frame["lifestyle_score_display"] = (
+        frame["smoke"].fillna(0).astype(int) * 2
+        + frame["alcohol"].fillna(0).astype(int)
+        + (1 - frame["active"].fillna(1).astype(int))
+    )
+    return frame
 
 
 def build_patient_dataframe() -> pd.DataFrame:
@@ -270,6 +305,7 @@ def render_tab1(
     risk_reference: pd.DataFrame,
     cluster_profiles_df: pd.DataFrame,
     stability_df: pd.DataFrame,
+    decision_threshold: float,
 ) -> None:
     section_header("Section 1: Overview")
     input_col, output_col = st.columns([1, 1.25])
@@ -287,7 +323,8 @@ def render_tab1(
             st.session_state["systolic_bp"] = st.slider("Systolic BP", 80, 200, st.session_state["systolic_bp"])
             st.session_state["diastolic_bp"] = st.slider("Diastolic BP", 50, 130, st.session_state["diastolic_bp"])
             tmp_patient = FeatureEngineer().engineer(build_patient_dataframe())
-            st.caption(f"Pulse pressure: {float(tmp_patient.iloc[0]['pulse_pressure']):.2f} mmHg | BP category: {bp_category_label(int(tmp_patient.iloc[0]['bp_category']))}")
+            bp_category = derive_bp_category(float(tmp_patient.iloc[0]["systolic_bp"]), float(tmp_patient.iloc[0]["diastolic_bp"]))
+            st.caption(f"Pulse pressure: {float(tmp_patient.iloc[0]['pulse_pressure']):.2f} mmHg | BP category: {bp_category_label(bp_category)}")
             st.session_state["cholesterol_raw"] = st.selectbox("Cholesterol", [150, 220, 280], index=[150, 220, 280].index(st.session_state["cholesterol_raw"]), format_func=lambda x: {150: "Normal (150)", 220: "Above normal (220)", 280: "Well above normal (280)"}[x])
             st.session_state["glucose_raw"] = st.selectbox("Glucose", [80, 120, 180], index=[80, 120, 180].index(st.session_state["glucose_raw"]), format_func=lambda x: {80: "Normal (80)", 120: "Above normal (120)", 180: "Well above normal (180)"}[x])
             st.session_state["smoke"] = st.checkbox("Smoke", value=st.session_state["smoke"])
@@ -309,6 +346,7 @@ def render_tab1(
             model_features = _model_features()
             probability = float(pipeline.predict_proba(patient_df[model_features])[0][1])
             tier = risk_tier(probability)
+            threshold_decision = probability >= decision_threshold
             shap_df, ci = explainer.explain_single(patient_df[model_features], feature_names)
             cluster_id, cluster_label = PatientSegmenter(BASE_DIR).predict_cluster(patient_df)
             _uncertainty_mean, uncertainty_std = get_uncertainty(pipeline, patient_df_raw)
@@ -326,6 +364,8 @@ def render_tab1(
             st.session_state["last_patient_features"] = patient_df_raw
             st.session_state["last_prediction"] = {
                 "probability": probability,
+                "decision_threshold": decision_threshold,
+                "threshold_decision": threshold_decision,
                 "ci": ci,
                 "uncertainty_std": uncertainty_std,
                 "cluster_id": cluster_id,
@@ -354,6 +394,8 @@ def render_tab1(
         bundle = st.session_state.get("last_prediction")
         if bundle is not None:
             probability = float(bundle["probability"])
+            decision_threshold = float(bundle.get("decision_threshold", 0.5))
+            threshold_decision = bool(bundle.get("threshold_decision", probability >= decision_threshold))
             ci = bundle["ci"]
             percentile = float(bundle["percentile"])
             comparison = bundle.get("cluster_comparison")
@@ -370,6 +412,10 @@ def render_tab1(
                 with c3:
                     compact_stat("Confidence", decision_summary["confidence"])
                 st.info(f"Insight: {decision_summary['impact_summary']}")
+                st.caption(
+                    f"Optimized decision cutoff: {decision_threshold:.2f} | "
+                    f"Classified as {'positive risk flag' if threshold_decision else 'below risk flag'}"
+                )
                 st.caption(f"95% CI: {_format_pct(ci['ci_lower'] * 100)} to {_format_pct(ci['ci_upper'] * 100)} | Higher risk than {percentile:.2f}% of similar individuals")
 
             with st.container():
@@ -429,15 +475,16 @@ def render_tab1(
 
 def render_tab2(featured_df: pd.DataFrame) -> None:
     section_header("Population Insights")
+    display_df = add_display_features(featured_df)
     filter_cols = st.columns(4)
-    age_values = sorted(featured_df["age_group"].dropna().unique())
-    bp_values = sorted(featured_df["bp_category"].dropna().unique())
+    age_values = sorted(display_df["age_group_display"].dropna().unique())
+    bp_values = sorted(display_df["bp_category_label"].dropna().unique())
     selected_age = filter_cols[0].multiselect("Age Group", age_values, default=age_values)
     selected_gender = filter_cols[1].radio("Gender", ["All", "Male", "Female"], horizontal=True)
     selected_bp = filter_cols[2].multiselect("BP Category", bp_values, default=bp_values)
     selected_source = filter_cols[3].radio("Source", ["All", "framingham", "cardio"], horizontal=True)
 
-    filtered = featured_df[featured_df["age_group"].isin(selected_age) & featured_df["bp_category"].isin(selected_bp)].copy()
+    filtered = display_df[display_df["age_group_display"].isin(selected_age) & display_df["bp_category_label"].isin(selected_bp)].copy()
     if selected_gender != "All":
         filtered = filtered[filtered["gender_bin"] == (1 if selected_gender == "Male" else 0)]
     if selected_source != "All":
@@ -451,27 +498,27 @@ def render_tab2(featured_df: pd.DataFrame) -> None:
 
     with st.container():
         card("Risk by Group")
-        age_fig = plotly_style(px.bar(filtered.groupby("age_group", as_index=False)["target"].mean(), x="age_group", y="target", title="Risk Rate by Age Group"))
-        bp_fig = plotly_style(px.bar(filtered.groupby("bp_category", as_index=False)["target"].mean(), x="bp_category", y="target", color="bp_category", title="Risk Rate by BP Category"))
+        age_fig = plotly_style(px.bar(filtered.groupby("age_group_display", as_index=False)["target"].mean(), x="age_group_display", y="target", title="Risk Rate by Age Group"))
+        bp_fig = plotly_style(px.bar(filtered.groupby("bp_category_label", as_index=False)["target"].mean(), x="bp_category_label", y="target", color="bp_category_label", title="Risk Rate by BP Category"))
         left, right = st.columns(2)
         left.plotly_chart(age_fig, width="stretch")
         right.plotly_chart(bp_fig, width="stretch")
 
     with st.container():
         card("Lifestyle and Correlation")
-        lifestyle_fig = plotly_style(px.histogram(filtered, x="lifestyle_risk_score", color="target", marginal="box", barmode="overlay", title="Lifestyle Risk Distribution"))
-        corr_cols = ["age_years", "bmi", "systolic_bp", "diastolic_bp", "pulse_pressure", "cholesterol_raw", "glucose_raw", "lifestyle_risk_score", "target"]
+        lifestyle_fig = plotly_style(px.histogram(filtered, x="lifestyle_score_display", color="target", marginal="box", barmode="overlay", title="Lifestyle Risk Distribution"))
+        corr_cols = ["age_years", "bmi", "systolic_bp", "diastolic_bp", "pulse_pressure", "cholesterol_raw", "glucose_raw", "mean_arterial_pressure", "target"]
         corr_fig = plotly_style(px.imshow(filtered[corr_cols].corr(numeric_only=True), text_auto=".2f", title="Correlation Heatmap"))
         left, right = st.columns(2)
         left.plotly_chart(lifestyle_fig, width="stretch")
         right.plotly_chart(corr_fig, width="stretch")
 
-    normal_risk = float(filtered.loc[filtered["bp_category"] == 0, "target"].mean()) if (filtered["bp_category"] == 0).any() else 0.0
-    stage2_risk = float(filtered.loc[filtered["bp_category"] == 3, "target"].mean()) if (filtered["bp_category"] == 3).any() else 0.0
-    high_life = float(filtered.loc[filtered["lifestyle_risk_score"] > 2, "target"].mean()) if (filtered["lifestyle_risk_score"] > 2).any() else 0.0
-    low_life = float(filtered.loc[filtered["lifestyle_risk_score"] <= 2, "target"].mean()) if (filtered["lifestyle_risk_score"] <= 2).any() else 0.0
-    young_risk = float(filtered.loc[filtered["age_group"] == 0, "target"].mean()) if (filtered["age_group"] == 0).any() else 0.0
-    senior_risk = float(filtered.loc[filtered["age_group"] == 2, "target"].mean()) if (filtered["age_group"] == 2).any() else 0.0
+    normal_risk = float(filtered.loc[filtered["bp_category_label"] == "Normal", "target"].mean()) if (filtered["bp_category_label"] == "Normal").any() else 0.0
+    stage2_risk = float(filtered.loc[filtered["bp_category_label"] == "Stage 2", "target"].mean()) if (filtered["bp_category_label"] == "Stage 2").any() else 0.0
+    high_life = float(filtered.loc[filtered["lifestyle_score_display"] > 2, "target"].mean()) if (filtered["lifestyle_score_display"] > 2).any() else 0.0
+    low_life = float(filtered.loc[filtered["lifestyle_score_display"] <= 2, "target"].mean()) if (filtered["lifestyle_score_display"] <= 2).any() else 0.0
+    young_risk = float(filtered.loc[filtered["age_group_display"] == "18-39", "target"].mean()) if (filtered["age_group_display"] == "18-39").any() else 0.0
+    senior_risk = float(filtered.loc[filtered["age_group_display"] == "60+", "target"].mean()) if (filtered["age_group_display"] == "60+").any() else 0.0
 
     with st.container():
         card("Insight Summary")
@@ -674,7 +721,7 @@ def main() -> None:
         render_missing_artifacts_message(missing_paths)
         st.stop()
 
-    pipeline, segmentation_artifact, featured_df, explainer, feature_names, cluster_profiles, risk_reference, cluster_profiles_df, stability_df = load_assets()
+    pipeline, segmentation_artifact, featured_df, explainer, feature_names, cluster_profiles, risk_reference, cluster_profiles_df, stability_df, decision_threshold = load_assets()
     _ = segmentation_artifact
     st.title("Cardiovascular Risk Decision-Support System")
     st.caption("This is a cardiovascular risk decision-support system, not just a prediction model.")
@@ -682,7 +729,17 @@ def main() -> None:
 
     tab1, tab2, tab3, tab4 = st.tabs(["Risk Predictor", "Population Insights", "Model Report", "What-If Analysis"])
     with tab1:
-        render_tab1(pipeline, explainer, feature_names, cluster_profiles, featured_df, risk_reference, cluster_profiles_df, stability_df)
+        render_tab1(
+            pipeline,
+            explainer,
+            feature_names,
+            cluster_profiles,
+            featured_df,
+            risk_reference,
+            cluster_profiles_df,
+            stability_df,
+            decision_threshold,
+        )
     with tab2:
         render_tab2(featured_df)
     with tab3:
@@ -693,14 +750,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
 
 

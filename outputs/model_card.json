@@ -1,11 +1,12 @@
 {
   "model_name": "XGBoost",
-  "training_date": "2026-03-21T15:29:12.439048",
-  "dataset_size": 13866,
-  "feature_count": 14,
+  "training_date": "2026-07-17T18:24:41.327991",
+  "dataset_size": 13848,
+  "feature_count": 22,
   "performance_metrics": {
-    "auc": 0.8091372560326273,
-    "average_precision": 0.7872505681755394
+    "auc": 0.8031627229899946,
+    "average_precision": 0.771670985003181,
+    "decision_threshold": 0.4599999999999999
   },
   "known_limitations": [
     "Model is trained on observational datasets and is not a diagnostic device.",

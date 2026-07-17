@@ -15,7 +15,10 @@ from sklearn.metrics import (
     average_precision_score,
     classification_report,
     confusion_matrix,
+    f1_score,
     precision_recall_curve,
+    precision_score,
+    recall_score,
     roc_auc_score,
     roc_curve,
 )
@@ -95,6 +98,7 @@ class Evaluator:
         pipeline: Pipeline,
         X_test: pd.DataFrame,
         y_test: pd.Series,
+        threshold: float = 0.5,
         save_path: str | Path = "outputs/confusion_matrix.png",
     ) -> None:
         """Plot normalized confusion matrix.
@@ -108,13 +112,14 @@ class Evaluator:
         Returns:
             None.
         """
-        y_pred = pipeline.predict(X_test)
+        y_prob = pipeline.predict_proba(X_test)[:, 1]
+        y_pred = (y_prob >= threshold).astype(int)
         cm = confusion_matrix(y_test, y_pred, normalize="true")
         plt.figure(figsize=(6, 5))
         sns.heatmap(cm, annot=True, fmt=".2f", cmap="Blues")
         plt.xlabel("Predicted")
         plt.ylabel("Actual")
-        plt.title("Normalized Confusion Matrix")
+        plt.title(f"Normalized Confusion Matrix (threshold={threshold:.2f})")
         plt.tight_layout()
         plt.savefig(Path(save_path), dpi=200)
         plt.close()
@@ -150,12 +155,32 @@ class Evaluator:
         plt.savefig(Path(save_path), dpi=200)
         plt.close()
 
+    def _save_threshold_sweep(self, y_test: pd.Series, y_prob: np.ndarray) -> None:
+        """Persist threshold sweep metrics for the selected model."""
+        thresholds = np.linspace(0.05, 0.95, 91)
+        rows: list[dict[str, Any]] = []
+        for threshold in thresholds:
+            prediction = (y_prob >= threshold).astype(int)
+            rows.append(
+                {
+                    "threshold": float(threshold),
+                    "precision": float(precision_score(y_test, prediction, zero_division=0)),
+                    "recall": float(recall_score(y_test, prediction, zero_division=0)),
+                    "f1": float(f1_score(y_test, prediction, zero_division=0)),
+                    "balanced_accuracy": float(
+                        (np.mean(prediction[y_test == 1] == 1) + np.mean(prediction[y_test == 0] == 0)) / 2.0
+                    ),
+                }
+            )
+        pd.DataFrame(rows).to_csv(self.outputs_dir / "threshold_sweep.csv", index=False)
+
     def full_report(
         self,
         pipeline: Pipeline,
         X_test: pd.DataFrame,
         y_test: pd.Series,
         model_name: str,
+        threshold: float = 0.5,
     ) -> dict[str, float]:
         """Generate full evaluation report and model card.
 
@@ -168,8 +193,8 @@ class Evaluator:
         Returns:
             Metrics dictionary.
         """
-        y_pred = pipeline.predict(X_test)
         y_prob = pipeline.predict_proba(X_test)[:, 1]
+        y_pred = (y_prob >= threshold).astype(int)
         report_text = classification_report(y_test, y_pred)
         auc_value = float(roc_auc_score(y_test, y_prob))
         average_precision = float(average_precision_score(y_test, y_prob))
@@ -177,12 +202,15 @@ class Evaluator:
         LOGGER.info("AUC %.4f | Average precision %.4f", auc_value, average_precision)
 
         self.plot_roc(pipeline, X_test, y_test, model_name, self.outputs_dir / "roc_curve.png")
-        self.plot_confusion_matrix(pipeline, X_test, y_test, self.outputs_dir / "confusion_matrix.png")
+        self.plot_confusion_matrix(pipeline, X_test, y_test, threshold, self.outputs_dir / "confusion_matrix.png")
         self.plot_pr_curve(pipeline, X_test, y_test, self.outputs_dir / "pr_curve.png")
+
+        self._save_threshold_sweep(y_test, y_prob)
 
         metrics = {
             "auc": auc_value,
             "average_precision": average_precision,
+            "decision_threshold": float(threshold),
         }
         model_card = ModelCard(
             model_name=model_name,

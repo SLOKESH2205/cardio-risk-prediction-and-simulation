@@ -1,0 +1,10 @@
+{
+  "threshold": 0.4599999999999999,
+  "false_positive_count": 2932,
+  "false_negative_count": 1128,
+  "files": [
+    "outputs/top_false_positives.csv",
+    "outputs/top_false_negatives.csv",
+    "outputs/error_feature_contrasts.csv"
+  ]
+}

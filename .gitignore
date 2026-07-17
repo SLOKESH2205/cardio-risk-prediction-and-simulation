@@ -5,8 +5,15 @@ __pycache__/
 *.pyd
 
 # Virtual env
+.venv/
+.venv*/
 venv/
 .env
+
+# Tool caches
+.pytest_cache/
+.mypy_cache/
+.uv-cache/
 
 # Jupyter
 .ipynb_checkpoints/

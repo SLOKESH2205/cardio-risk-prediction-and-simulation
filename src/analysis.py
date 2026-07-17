@@ -20,22 +20,20 @@ FEATURE_LABELS = {
     "cholesterol_raw": "Cholesterol",
     "glucose_raw": "Glucose",
     "smoke": "Smoking",
+    "active": "Activity",
+    "mean_arterial_pressure": "Mean Arterial Pressure",
+    "age_cholesterol_interaction": "Age-Cholesterol Interaction",
+    "systolic_bp_squared": "Systolic BP Squared",
     "pulse_pressure": "Pulse Pressure",
-    "lifestyle_risk_score": "Lifestyle Score",
-    "bp_bmi_interaction": "BP-BMI Interaction",
-    "age_bp_interaction": "Age-BP Interaction",
-    "bp_category": "BP Category",
-    "age_group": "Age Group",
-    "bmi_category": "BMI Category",
 }
 
 
 RISK_BREAKDOWN_MAP = {
-    "Blood Pressure": {"systolic_bp", "diastolic_bp", "pulse_pressure", "bp_category", "bp_bmi_interaction"},
-    "Age Interaction": {"age_years", "age_group", "age_bp_interaction"},
+    "Blood Pressure": {"systolic_bp", "diastolic_bp", "pulse_pressure", "mean_arterial_pressure", "systolic_bp_squared"},
+    "Age Interaction": {"age_years", "age_cholesterol_interaction"},
     "Cholesterol": {"cholesterol_raw", "glucose_raw"},
-    "Lifestyle": {"smoke", "lifestyle_risk_score"},
-    "Body Composition": {"bmi", "bmi_category"},
+    "Lifestyle": {"smoke", "alcohol", "active"},
+    "Body Composition": {"bmi"},
 }
 
 
@@ -65,13 +63,17 @@ def feature_stability(df: pd.DataFrame, threshold: float = 0.20) -> pd.DataFrame
         "glucose_raw",
         "bmi",
         "age_years",
-        "lifestyle_risk_score",
+        "mean_arterial_pressure",
+        "age_cholesterol_interaction",
     ]
+    feature_order = [feature for feature in feature_order if feature in df.columns]
     rows: list[dict[str, Any]] = []
     for feature in feature_order:
         row: dict[str, Any] = {"feature": feature, "feature_label": FEATURE_LABELS.get(feature, feature)}
         correlations: dict[str, float] = {}
         for source, source_df in df.groupby("source"):
+            if feature not in source_df.columns:
+                continue
             corr = float(source_df[[feature, "target"]].corr(numeric_only=True).loc[feature, "target"])
             correlations[str(source)] = corr
             row[f"{source}_corr"] = corr

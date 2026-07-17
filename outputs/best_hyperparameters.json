@@ -1,0 +1,16 @@
+{
+  "subsample": 0.8,
+  "scale_pos_weight": 1.577,
+  "reg_lambda": 1.5,
+  "reg_alpha": 0.05,
+  "n_estimators": 300,
+  "min_child_weight": 5,
+  "max_depth": 3,
+  "learning_rate": 0.02,
+  "gamma": 0.5,
+  "colsample_bytree": 0.8,
+  "base_scale_pos_weight": 1.051291547078974,
+  "cv_f1": 0.735578152272354,
+  "cv_recall": 0.7918708750117857,
+  "cv_auc": 0.8032131545267438
+}
