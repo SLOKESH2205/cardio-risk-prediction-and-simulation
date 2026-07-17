@@ -6,9 +6,9 @@
 [![Python](https://img.shields.io/badge/python-3.11-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![Model](https://img.shields.io/badge/model-XGBoost-006400)](#-model-performance)
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](#-testing)
-[![License](https://img.shields.io/badge/license-MIT-lightgrey)](#-license)
 
 🌐 **Live demo:** https://cardio-risk-prediction-and-simulation.streamlit.app
+--
 📦 **Repo:** https://github.com/SLOKESH2205/cardio-risk-prediction-and-simulation
 
 ---
